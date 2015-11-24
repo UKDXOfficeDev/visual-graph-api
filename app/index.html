@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<title>Document</title>
+	<script src="//d3js.org/d3.v3.js" charset="utf-8"></script>
+	<script src="/scripts/adal.js"></script>
+</head>
+
+<body>
+	<h1>D3</h1>
+	<p id="response"></p>
+	<script type="text/javascript">
+		// If your account is 'yourdomain.onmicrosoft.com', this value should be 'yourdomain'.
+		var tenant = 'fitnesscloud';
+
+		// Get this value from the Configure tab of your application page in Azure Management Portal.
+		var clientId = '653de042-7dca-4abe-b45d-feb64c5df322';
+	    var baseEndpoint = 'https://graph.microsoft.com';
+
+	    // Enter Global Config Values & Instantiate ADAL AuthenticationContext
+		window.config = {
+			tenant: tenant + '.co.uk',                 
+			clientId: clientId,     
+			postLogoutRedirectUri: window.location.origin,
+			// endpoints: endpoints,
+			cacheLocation: 'localStorage', // enable this for IE, as sessionStorage does not work for localhost.
+		};
+
+		document.addEventListener("DOMContentLoaded", function(){ 
+			
+			var authContext = new AuthenticationContext(config);
+			
+			// Check For & Handle Redirect From AAD After Login
+			var isCallback = authContext.isCallback(window.location.hash);
+			authContext.handleWindowCallback();
+			var error = authContext.getLoginError();
+		
+			if (isCallback && !authContext.getLoginError()) {
+				window.location = authContext._getItem(authContext.CONSTANTS.STORAGE.LOGIN_REQUEST);
+			}
+	
+			// Check Login Status, Update UI
+			var user = authContext.getCachedUser();
+			if (user) {
+				authContext.acquireToken(baseEndpoint, function (error, token) {
+	
+					if (error)
+						alert(error);
+
+					if (token) {
+						var xhr = d3.xhr('https://graph.microsoft.com/v1.0/$metadata', 'application/json');
+						xhr.header('Authorization', 'Bearer ' + token);
+						xhr.get(function(err, response) {
+							if (err)
+								alert(err);
+  							
+							var xmlDoc;  
+							if (window.DOMParser) {
+								parser = new DOMParser();
+								xmlDoc = parser.parseFromString(response.responseText,"text/xml");
+							} else {
+								xmlDoc = new ActiveXObject("Microsoft.XMLDOM");
+								xmlDoc.async = false;
+								xmlDoc.loadXML(response.responseText);
+							}
+							
+							//var resp = document.getElementById('response');
+							//resp.innerText = response.responseText;
+							
+							// transform the data into a tree hierarchy where each node has a children array..
+							var res = xmlDoc.querySelectorAll('Singleton[Name=me]');
+							var me = res[0];
+							var navigations = me.querySelectorAll('NavigationPropertyBinding');
+							 
+							var userEntity = xmlDoc.querySelectorAll('EntityType[Name=user]')[0]; 
+							var userProps = userEntity.querySelectorAll('Property');
+							
+							var graph = {};
+							graph.me = {};
+							graph.me.children = [];
+							graph.me.children.push.apply(graph.me.children, navigations.map(function(item) {
+								return item.Path;
+							}));
+							graph.me.children.push.apply(graph.me.children, userProps);
+							 
+							var svg = d3.select("body").append("svg")
+								.attr("width", 800)
+								.attr("height", 600)
+  								.append("g");
+								   
+							var tree = d3.layout.tree()
+								.size([600, 400]);
+														
+							var nodes = tree.nodes(graph),
+    							links = tree.links(nodes);
+
+							console.log(nodes);
+							
+							var node = svg.selectAll("g.node")
+											.data(nodes)
+											.enter()
+											.append("g")
+											.attr("class", "node")
+											.attr("transform", function(d) {
+												return "translate(" + d.x + "," + d.y + ")";
+											});
+											
+							node.append("circle")
+								.attr("r", 5)
+								.attr("fill", "steelblue");
+
+						});
+					}						
+												
+					// d3.json('https://graph.microsoft.com/v1.0/?$metadata', function(error, data) {
+					// 	if (error) {
+					// 		alert(error.message);
+					// 	}
+					// 	alert(data);
+					// }); 
+				});
+				
+			} else {
+				authContext.login();
+			}			
+		}, false);
+	</script>
+</body>
+
+</html>
