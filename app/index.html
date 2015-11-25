@@ -73,17 +73,23 @@
 							var res = xmlDoc.querySelectorAll('Singleton[Name=me]');
 							var me = res[0];
 							var navigations = me.querySelectorAll('NavigationPropertyBinding');
+							var navigations_array = Array.prototype.slice.call(navigations); 
 							 
 							var userEntity = xmlDoc.querySelectorAll('EntityType[Name=user]')[0]; 
 							var userProps = userEntity.querySelectorAll('Property');
+							var userprops_array = Array.prototype.slice.call(userProps); 
 							
 							var graph = {};
 							graph.me = {};
 							graph.me.children = [];
-							graph.me.children.push.apply(graph.me.children, navigations.map(function(item) {
-								return item.Path;
+							graph.me.children.push.apply(graph.me.children, navigations_array.map(function(item) {
+								var path = item.getAttribute('Path')
+								return { type: 'nav', value: path };
 							}));
-							graph.me.children.push.apply(graph.me.children, userProps);
+							graph.me.children.push.apply(graph.me.children, userprops_array.map(function(item) {
+								var name = item.getAttribute('Name')
+								return { type: 'prop', value: name };								
+							}));
 							 
 							var svg = d3.select("body").append("svg")
 								.attr("width", 800)
@@ -93,7 +99,7 @@
 							var tree = d3.layout.tree()
 								.size([600, 400]);
 														
-							var nodes = tree.nodes(graph),
+							var nodes = tree.nodes(graph.me),
     							links = tree.links(nodes);
 
 							console.log(nodes);
@@ -104,7 +110,7 @@
 											.append("g")
 											.attr("class", "node")
 											.attr("transform", function(d) {
-												return "translate(" + d.x + "," + d.y + ")";
+												return "translate(" + d.y + "," + d.x + ")";
 											});
 											
 							node.append("circle")
