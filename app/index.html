@@ -80,7 +80,7 @@
 							var userprops_array = Array.prototype.slice.call(userProps); 
 							
 							var graph = {};
-							graph.me = {};
+							graph.me = { type: 'root', value: 'me' };
 							graph.me.children = [];
 							graph.me.children.push.apply(graph.me.children, navigations_array.map(function(item) {
 								var path = item.getAttribute('Path')
@@ -110,13 +110,29 @@
 											.append("g")
 											.attr("class", "node")
 											.attr("transform", function(d) {
-												return "translate(" + d.y + "," + d.x + ")";
+												return "translate(" + d.x + "," + d.y + ")";
 											});
-											
+									
+							var diagonal = d3.svg.diagonal();
+							svg.selectAll('.link')
+								.data(links)
+								.enter()
+								.append("path")
+								.attr("class", "link")
+								.attr("fill", "none")
+								.attr("stroke", "#555555")
+								.attr("d", diagonal);
+												
 							node.append("circle")
 								.attr("r", 5)
 								.attr("fill", "steelblue");
 
+							node.append("text")
+								.text(function(n) {
+									var val = n.value;
+									return val;
+								})
+								.attr("transform", function(d) { return 'rotate(90)';});
 						});
 					}						
 												
