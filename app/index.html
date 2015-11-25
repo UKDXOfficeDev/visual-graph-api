@@ -125,7 +125,15 @@
 												
 							node.append("circle")
 								.attr("r", 5)
-								.attr("fill", "steelblue");
+								.attr("fill", function(n) {
+									if (n.type === 'root') {
+										return "red";
+									}
+									else if (n.type === 'prop') {
+										return 'orange';
+									}
+									return "steelblue";
+								});
 
 							node.append("text")
 								.text(function(n) {
