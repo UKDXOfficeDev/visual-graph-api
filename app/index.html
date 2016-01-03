@@ -1,17 +1,45 @@
 <!DOCTYPE html>
-<html lang="en">
+<meta charset="utf-8">
+<title>Force-Directed Graph</title>
+<style>
 
-<head>
-	<meta charset="UTF-8">
-	<title>Document</title>
-	<script src="//d3js.org/d3.v3.js" charset="utf-8"></script>
-	<script src="/scripts/adal.js"></script>
-</head>
+.node {
+  cursor: pointer;
+  stroke: #3182bd;
+  stroke-width: 1.5px;
+}
 
+.link {
+  fill: none;
+  stroke: #9ecae1;
+  stroke-width: 1.5px;
+}
+
+</style>
 <body>
-	<h1>D3</h1>
-	<p id="response"></p>
-	<script type="text/javascript">
+<script src="//d3js.org/d3.v3.min.js"></script>
+<script src="/scripts/adal.js"></script>
+<script>
+
+var width = 960,
+    height = 500,
+    root,
+    accessToken,
+    authContext;
+
+var force = d3.layout.force()
+    .size([width, height])
+    .linkDistance(80)
+    .charge(-640)
+    .on("tick", tick);
+
+var svg = d3.select("body").append("svg")
+    .attr("width", width)
+    .attr("height", height);
+
+var link = svg.selectAll(".link"),
+    node = svg.selectAll(".node");
+
 		// If your account is 'yourdomain.onmicrosoft.com', this value should be 'yourdomain'.
 		var tenant = 'fitnesscloud';
 
@@ -30,7 +58,7 @@
 
 		document.addEventListener("DOMContentLoaded", function(){ 
 			
-			var authContext = new AuthenticationContext(config);
+			authContext = new AuthenticationContext(config);
 			
 			// Check For & Handle Redirect From AAD After Login
 			var isCallback = authContext.isCallback(window.location.hash);
@@ -50,8 +78,9 @@
 						alert(error);
 
 					if (token) {
+            accessToken = token;
 						var xhr = d3.xhr('https://graph.microsoft.com/v1.0/$metadata', 'application/json');
-						xhr.header('Authorization', 'Bearer ' + token);
+						xhr.header('Authorization', 'Bearer ' + accessToken);
 						xhr.get(function(err, response) {
 							if (err)
 								alert(err);
@@ -70,9 +99,9 @@
 							//resp.innerText = response.responseText;
 							
 							// transform the data into a tree hierarchy where each node has a children array..
-							var res = xmlDoc.querySelectorAll('Singleton[Name=me]');
+							var res = xmlDoc.querySelectorAll('EntityType[Name=user]');
 							var me = res[0];
-							var navigations = me.querySelectorAll('NavigationPropertyBinding');
+							var navigations = me.querySelectorAll('NavigationProperty');
 							var navigations_array = Array.prototype.slice.call(navigations); 
 							 
 							var userEntity = xmlDoc.querySelectorAll('EntityType[Name=user]')[0]; 
@@ -80,90 +109,158 @@
 							var userprops_array = Array.prototype.slice.call(userProps); 
 							
 							var graph = {};
-							graph.me = { type: 'root', value: 'me' };
+							graph.me = { type: 'root', value: 'me', size: 40000 };
 							graph.me.children = [];
 							graph.me.children.push.apply(graph.me.children, navigations_array.map(function(item) {
-								var path = item.getAttribute('Path')
-								return { type: 'nav', value: path };
+								var path = item.getAttribute('Name')
+								return { type: 'nav', value: path, size: 20000 };
 							}));
 							graph.me.children.push.apply(graph.me.children, userprops_array.map(function(item) {
 								var name = item.getAttribute('Name')
-								return { type: 'prop', value: name };								
+								return { type: 'prop', value: name, size: 10000 };								
 							}));
-							 
-							var svg = d3.select("body").append("svg")
-								.attr("width", 800)
-								.attr("height", 600)
-  								.append("g");
-								   
-							var tree = d3.layout.tree()
-								.size([600, 400]);
-														
-							var nodes = tree.nodes(graph.me),
-    							links = tree.links(nodes);
-
-							console.log(nodes);
-							
-							var node = svg.selectAll("g.node")
-											.data(nodes)
-											.enter()
-											.append("g")
-											.attr("class", "node")
-											.attr("transform", function(d) {
-												return "translate(" + d.y + "," + d.x + ")";
-											})
-											.on("click", function(obj) {
-												alert(obj.value);
-											});;
-									
-							var diagonal = d3.svg.diagonal()
-								.projection(function(d) {
-									return [d.y, d.x];
-								});
-							svg.selectAll('.link')
-								.data(links)
-								.enter()
-								.append("path")
-								.attr("class", "link")
-								.attr("fill", "none")
-								.attr("stroke", "#555555")
-								.attr("d", diagonal);
-												
-							node.append("circle")
-								.attr("r", 5)
-								.attr("fill", function(n) {
-									if (n.type === 'root') {
-										return "red";
-									}
-									else if (n.type === 'prop') {
-										return 'orange';
-									}
-									return "steelblue";
-								});
-
-							node.append("text")
-								.text(function(n) {
-									var val = n.value;
-									return val;
-								})
-								//.attr("transform", function(d) { return 'rotate(90)';}
-								//);
+                
+              root = graph.me;  
+              update();				
 						});
 					}						
-												
-					// d3.json('https://graph.microsoft.com/v1.0/?$metadata', function(error, data) {
-					// 	if (error) {
-					// 		alert(error.message);
-					// 	}
-					// 	alert(data);
-					// }); 
 				});
 				
 			} else {
 				authContext.login();
 			}			
 		}, false);
-	</script>
-</body>
+      
 
-</html>
+// d3.json("readme.json", function(error, json) {
+//   if (error) throw error;
+// 
+//   root = json;
+//   update();
+// }); 
+
+function update() {
+  var nodes = flatten(root),
+      links = d3.layout.tree().links(nodes);
+
+  // Restart the force layout.
+  force
+      .nodes(nodes)
+      .links(links)
+      .start();
+
+  // Update the links…
+  link = link.data(links, function(d) { return d.target.id; });
+
+  // Exit any old links.
+  link.exit().remove();
+
+  // Enter any new links.
+  link.enter().insert("line", ".node")
+      .attr("class", "link")
+      .attr("x1", function(d) { return d.source.x; })
+      .attr("y1", function(d) { return d.source.y; })
+      .attr("x2", function(d) { return d.target.x; })
+      .attr("y2", function(d) { return d.target.y; });
+
+  // Update the nodes…
+  node = node.data(nodes, function(d) { return d.id; }).style("fill", color);
+
+  // Exit any old nodes.
+  node.exit().remove();
+
+  // Enter any new nodes.
+  node.enter().append("circle")
+      .attr("class", "node")
+      .attr("cx", function(d) { return d.x; })
+      .attr("cy", function(d) { return d.y; })
+      .attr("r", function(d) { 
+        return Math.sqrt(d.size) / 10 || 4.5; 
+        })
+      .attr("fill", function(n) {
+        if (n.type === 'root') {
+          return "red";
+        }
+        else if (n.type === 'prop') {
+          return 'orange';
+        }
+        return "steelblue";
+        }
+      )
+      //.style("fill", color)
+      .on("click", click)
+      .call(force.drag);
+}
+
+function tick() {
+  link.attr("x1", function(d) { return d.source.x; })
+      .attr("y1", function(d) { return d.source.y; })
+      .attr("x2", function(d) { return d.target.x; })
+      .attr("y2", function(d) { return d.target.y; });
+
+  node.attr("cx", function(d) { return d.x; })
+      .attr("cy", function(d) { return d.y; });
+}
+
+// Color leaf nodes orange, and packages white or blue.
+function color(d) {
+  return d._children ? "#3182bd" : d.children ? "#c6dbef" : "#fd8d3c";
+}
+
+// Toggle children on click.
+function click(d) {
+  if (!d3.event.defaultPrevented) {
+    
+    // load up children if appropriate..
+    if (d.type !== 'prop' && !d.hasLoaded) {
+				authContext.acquireToken(baseEndpoint, function (error, token) {	
+					if (error)
+						alert(error);
+          
+          var xhr = d3.xhr('https://graph.microsoft.com/v1.0/me/' + d.value, 'application/json');
+          xhr.header('Authorization', 'Bearer ' + token);
+          xhr.get(function(err, response) {
+            if (err) {
+              alert(err);
+              return;
+            }      
+            var resp = JSON.parse(response.responseText);
+            
+            // put all non-null properties into children array...
+            for (var prop in resp) {
+              if (prop !== null) {
+                if (!d.children)
+                  d.children = [];
+                d.children.push({ type: 'prop', value: prop, size: 10000 });  
+              }
+            }
+            update();
+            d.hasLoaded = true;
+          });
+      });
+    } else if (d.children) {
+      d._children = d.children;
+      d.children = null;
+    } else {
+      d.children = d._children;
+      d._children = null;
+    }
+    update();
+  }
+}
+
+// Returns a list of all nodes under the root.
+function flatten(root) {
+  var nodes = [], i = 0;
+
+  function recurse(node) {
+    if (node.children) node.children.forEach(recurse);
+    if (!node.id) node.id = ++i;
+    nodes.push(node);
+  }
+
+  recurse(root);
+  return nodes;
+}
+
+</script>

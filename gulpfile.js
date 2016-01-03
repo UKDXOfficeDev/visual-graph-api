@@ -5,7 +5,7 @@ var webserver = require('gulp-webserver');
 gulp.task('webserver', function() {
   gulp.src('app')
     .pipe(webserver({
-      fallback:   'index.html',
+      fallback:   'index2.html',
       livereload: true,
       open:       true,
       directoryListing: {
